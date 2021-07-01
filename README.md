@@ -10,7 +10,7 @@
 1. 爬取合适的有价值的query（关键词）下的论文
 2. 爬取文章数量大于800篇
 3. 爬取相关重要信息
-4. 导出refworks文件（.txt）
+4. 导出refworks文件或endnote文件（.txt）
 5. 依次下载PDF原文文件，解决中间处理问题
 6. 数据分析（关键词替换）——数据可视化
 ## 项目过程（步骤）
@@ -67,7 +67,7 @@ driver.switch_to_window(driver.window_handles[1]) #定位当前窗口
 ### 第三步：进行检索（挖取一页的文章基本信息）
 
 ```
-# 点击高级检索
+# 点击学术期刊
 element = driver.find_element_by_xpath('/html/body/div[3]/div[1]/div/ul[1]/li[1]/a')
 element.click()
 # 点击专业检索
@@ -110,10 +110,36 @@ pd.read_html(page_html)[0]
 ```
 - 此时已经可以获取一页数据信息，信息包括论文篇名、作者、刊名、发表时间、被引和下载次数。
 
-### 第四步：导出refworks文件
-> 这里我们可以使用两种方法进行导出，导出的refworks文件可用来进行数据可视化分析，可选择其中一种方法进行导出，觉得哪种好用用哪种。
-#### 方法一：直接按最大量500篇循环导出
-#### 方法二：分每页50篇各自循环导出
+### 第四步：导出refworks和endnote文件
+> 这里我们需要导出的refworks文件或endnote文件可用来进行数据可视化分析。
+#### endnote：分每页50篇各自循环导出
+```
+# 将循环时需要点击的元素做成列表
+piliang_list = []
+piliang_list.append('//*[@id="gridTable"]/div[1]/div[2]/div[1]/a')
+piliang_list.append("/html/body/div[3]/div[2]/div[2]/div[2]/form/div/div[1]/div[2]/div[1]/label/input")
+piliang_list.append("/html/body/div[3]/div[2]/div[2]/div[2]/form/div/div[1]/div[2]/ul[1]/li[2]/i")
+piliang_list.append("/html/body/div[3]/div[2]/div[2]/div[2]/form/div/div[1]/div[2]/ul[1]/li[2]/ul/li[1]/a")
+piliang_list.append("/html/body/div[3]/div[2]/div[2]/div[2]/form/div/div[1]/div[2]/ul[1]/li[2]/ul/li[1]/ul/li[9]/a")
+```
+
+```
+for page in range(0,26):# 因为最后一页没有下一页的按键，所以在第一行代码的页面循环中只需填写到最后一页的上一页页数即可，如此次爬取的全部为27页，则填写（0,26），循环到第26页的最后一个下一页按键即可。
+    for i in piliang_list:#循环点击元素的列表，依次点击
+        element = driver.find_element_by_xpath(i)
+        element.click()
+        time.sleep(2)
+    driver.switch_to.window(driver.window_handles[2])#定位新窗口
+    time.sleep(10)
+    driver.find_element_by_xpath('//*[@id="litotxt"]/a').click()#点击导出
+    time.sleep(10)
+    driver.close()#关闭新窗口
+    time.sleep(4)
+    driver.switch_to.window(driver.window_handles[1])#定位回原窗口
+    driver.find_element_by_xpath('//*[@id="PageNext"]').click()#点击下一页
+    time.sleep(12)
+```
+#### refworks：分每页50篇各自循环导出
 
 ```
 # 将循环时需要点击的元素做成列表
@@ -141,7 +167,7 @@ for page in range(0,26):# 因为最后一页没有下一页的按键，所以在
     driver.find_element_by_xpath('//*[@id="PageNext"]').click()#点击下一页
     time.sleep(12)
 ```
-> 此时便可以将我们所需要的refworks文件导出到本地文档中，我们也可将这些文件用于进行下一步的数据可视化分析了。
+> 此时便可以将我们所需要的endnote文件导出到本地文档中，我们也可将这些文件用于进行下一步的数据可视化分析了。
 
 ### 第五步：PDF原文文件下载（依次下载每篇文章的PDF原文文件，将所有需要的文章下载下来）
 - 在此之前我们应该梳理一下挖取时的逻辑顺序，经过几次尝试，先基本摸清可能出现的一些问题，再将这些问题分情况进行判断解决，使用较好的逻辑顺序去挖取我们所需要的文件及其数据。
@@ -154,15 +180,11 @@ for page in range(0,26):# 因为最后一页没有下一页的按键，所以在
 ```
 # 封装判断验证码
 def img_have():
-    element = driver.find_element_by_xpath('//html')
-    main_content =element.get_attribute('outerHTML')  
-    html = requests_html.HTML(html= main_content, url='https://localhost/')
-    data_list = html.xpath('//*[@id="vImg"]')#验证码图片
-    if data_list==[]:
-        r = False #如果为空则没有验证码，返回False
-    else:
-        r = True #反之为真，即有验证码图片存在
-    return r
+    try:
+        driver.find_element_by_xpath('//*[@id="vImg"]')#验证码图片
+        return True#为真，即有验证码图片存在
+    except:
+        return False#反之为空则没有验证码，返回False
 ```
 
  **封装截图函数** 
@@ -277,7 +299,7 @@ def wenjian3():
 - 当我们将所有用到的功能封装好后，我们便可以开始进行PDF原文文件的自动循环下载了，代码如下：
 
 ```
-for page in range(1,2): #先进行两页循环
+for page in range(1,4): #先进行三页循环，可自行选择爬取页数
     for link in range(1,50):#可选择从一页中的第几篇文章开始挖取到第几篇文章结束挖取
         pdf_xpath = '//*[@id="gridTable"]/table/tbody/tr[{}]/td[2]/a'.format(link)
         driver.find_element_by_xpath(pdf_xpath).click()#点击文章进入文章详情页
@@ -295,9 +317,11 @@ for page in range(1,2): #先进行两页循环
             base64_api(uname, pwd, img, typeid)#调用图鉴api识别验证码内容
             shuru()#填写识别出来的验证码内容
             wenjian1()#检测下载文件夹内的文件数量
+            file = wenjian1()
             time.sleep(1)
             driver.find_element_by_xpath('/html/body/div/form/dl/dd/button').click()#点击验证码提交
             wenjian2()#检测点击下载后文件夹内的文件数量
+            file2 = wenjian2()
             time.sleep(1)
             wenjian3()#判断下载文件夹内的文件数量是否变化
             abc2 = wenjian3()
@@ -306,8 +330,10 @@ for page in range(1,2): #先进行两页循环
                 base64_api(uname, pwd, img, typeid)#调用图鉴api识别验证码内容
                 shuru()#填写识别出来的验证码内容
                 wenjian1()#检测下载文件夹内的文件数量
+                file = wenjian1()
                 driver.find_element_by_xpath('/html/body/div/form/dl/dd/button').click()#点击验证码提交
                 wenjian2()#检测点击下载后文件夹内的文件数量
+                file2 = wenjian2()
                 wenjian3()#判断下载文件夹内的文件数量是否变化
                 abc2 = wenjian3()
                 if abc2 == True:#如果判断等于True，则代表输入正确下载成功
@@ -323,8 +349,15 @@ for page in range(1,2): #先进行两页循环
 ```
 - 这样就成功爬取出了我们需要的全部PDF原文文件，而其中出现的问题也得到了一并解决。
 
+### 数据分析
+- 将爬取到的endnote文件先制作成ris文件再通过VOSviewer对这些文章的关键词进行数据可视化处理，获取关键词及它们之间的数据结果关系，处理结果如下：
+> 在人工智能和大数据的主题下所爬取到的所有文章中，关键词都有深度学习、数据挖掘、物联网、区块链、云计算、数字经济、金融科技、智慧教育、教育大数据、大数据分析、大数据时代、互联网、智能制造、算法歧视、算法、数字孪生、数据驱动、知识服务、媒体融合、智能化、5G、图书馆、知识图谱等。其中深度学习、区块链、物联网、云计算等是高频重点关键词，也就是说在人工智能和大数据的主题下，这几个关键词是大体的研究重点；而金融经济类的数字科技，如金融科技和数字经济比起教育类的智慧教育、教育大数据等关键词出现次数多，也就是说在人工智能和大数据的主题下，相较于教育类更多人研究金融经济类；媒体融合、5G、智能化等关键词频次较少，但与金融经济类和教育类以及区块链、物联网等关键词联系更为紧密，也就是说它们出现在同一篇文章中的次数多，这也就意味着现实生活中这些关键词的联系是人工智能和大数据主题下的一大热门课题；而数字孪生、数据驱动、知识服务、算法歧视、算法等关键词出现的频次和与其他关键词的联系就相对少了很多，也就是说这些关键词更相对的属于更加专业化、深度化的课题下，它们较为小众，但同样重要，只是研究其课题程度的人较少。
+
+[数据可视化分析图]（）
+
+
 ## 项目结果
-* 成功爬取合适的有价值的query（大数据和人工智能）下的论文总计27页的所有文章，总计1306篇文章。爬取内容包括论文篇名、作者、刊名、发表时间、下载次数以及导出refworks文件（.txt），并成功保存在本地的文件夹中，也成功依次自动化循环下载PDF原文文件，成功处理了中间产生的各种问题，最后进行了数据分析——数据可视化。
+* 成功爬取合适的有价值的query（大数据和人工智能）下的论文总计27页的所有文章，总计1307篇文章。爬取内容包括论文篇名、作者、刊名、发表时间、下载次数以及导出refworks文件和endnote文件（.txt），并成功保存在本地的文件夹中，也成功依次自动化循环下载PDF原文文件，成功处理了中间产生的各种问题，最后进行了数据分析——数据可视化。
 
 ## 总结
 * 在本次期末项目实践中，我学习并逐渐了解学习了selenium和其他模块的操作以及知网文章爬取，并加深了对数据挖掘这门课的理解。感谢智超老师的细心指导以及解答，同时感谢在项目完成过程中对我有帮助的同学们。
